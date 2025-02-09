@@ -3,20 +3,24 @@ package com.sandcore;
 import com.sandcore.utils.ChatColorUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
-import org.bukkit.configuration.ConfigurationSection; // Correct import!
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.attribute.Attribute;
+import org.bukkit.boss.BarColor;
+import org.bukkit.boss.BarStyle;
+import org.bukkit.boss.BossBar;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -58,10 +62,15 @@ public class SandCore extends JavaPlugin {
         // Load persistent player data.
         PlayerDataManager.loadData();
 
+        // Load custom level data.
+        LevelManager.loadData();
+
         // Register event listeners.
         Bukkit.getPluginManager().registerEvents(new ClassSelectionGUI(), this);
         Bukkit.getPluginManager().registerEvents(new StatsUpgradeGUI(), this);
         Bukkit.getPluginManager().registerEvents(new AdminStatsGUI(), this);
+        Bukkit.getPluginManager().registerEvents(new StatsGUI(), this);
+        Bukkit.getPluginManager().registerEvents(new LevelListener(), this);
 
         // Register command executors and tab completers.
         Commands commands = new Commands();
@@ -73,6 +82,7 @@ public class SandCore extends JavaPlugin {
         getCommand("adminstats").setTabCompleter(commands);
         // The "skilltree" command and associated functionality have been removed.
         getCommand("screload").setExecutor(new ReloadCommand());
+        getCommand("xp").setExecutor(commands);
 
         String header = ChatColorUtil.translateHexColorCodes(
                 getConfig().getString("ui.header", "&#00FF7F&lSANDCORE PLUGIN LOADED!")
@@ -87,6 +97,11 @@ public class SandCore extends JavaPlugin {
     public void onDisable() {
         PlayerDataManager.saveData();
         PlayerStatsManager.saveStats();
+        LevelManager.saveData();
+        // Remove any active boss bars.
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            LevelBarManager.removeLevelBar(player);
+        }
     }
 
     // 1. PlayerStats holds stat values.
@@ -190,13 +205,12 @@ public class SandCore extends JavaPlugin {
 
     // 4. ClassSelectionGUI displays a configurable 27-slot GUI for class selection.
     public static class ClassSelectionGUI implements Listener {
-        // Opens a 27-slot GUI with class items loaded from classes.yml.
         public static void open(Player player) {
             int size = 27;
             String title = ChatColor.GOLD + "Select Your Class";
             Inventory gui = Bukkit.createInventory(null, size, title);
 
-            // You can optionally fill unused slots with your filler item.
+            // Optionally fill unused slots with a filler item.
             for (int i = 0; i < size; i++) {
                 gui.setItem(i, new ItemStack(Material.AIR));
             }
@@ -268,7 +282,7 @@ public class SandCore extends JavaPlugin {
         }
     }
 
-    // 5. StatsUpgradeGUI for players to upgrade their stats.
+    // 5. StatsUpgradeGUI for players to upgrade their stats (old 9-slot GUI).
     public static class StatsUpgradeGUI implements Listener {
         public static void open(Player player) {
             Inventory gui = Bukkit.createInventory(null, 9, ChatColor.AQUA + "Upgrade Your Stats");
@@ -311,20 +325,24 @@ public class SandCore extends JavaPlugin {
             boolean upgraded = false;
             if (stat.contains("health")) {
                 stats.setHealth(stats.getHealth() + 5.0);
+                player.sendMessage(ChatColor.GREEN + "Your Health has been increased by 5.0!");
                 upgraded = true;
             } else if (stat.contains("damage")) {
                 stats.setDamage(stats.getDamage() + 1.0);
+                player.sendMessage(ChatColor.GREEN + "Your Damage has been increased by 1.0!");
                 upgraded = true;
             } else if (stat.contains("speed")) {
                 stats.setSpeed(stats.getSpeed() + 0.02);
+                player.sendMessage(ChatColor.GREEN + "Your Speed has been increased by 0.02!");
                 upgraded = true;
             } else if (stat.contains("defense")) {
                 stats.setDefense(stats.getDefense() + 0.5);
+                player.sendMessage(ChatColor.GREEN + "Your Defense has been increased by 0.5!");
                 upgraded = true;
             }
             if (upgraded) {
                 stats.applyToPlayer(player);
-                player.sendMessage(ChatColor.GREEN + "Stat upgraded!");
+                // Refresh the GUI with updated stats.
                 open(player);
             } else {
                 player.sendMessage(ChatColor.RED + "You have no available stat points!");
@@ -332,7 +350,93 @@ public class SandCore extends JavaPlugin {
         }
     }
 
-    // 6. AdminStatsGUI lets admins view and modify a player's stats in an expanded (27-slot) GUI.
+    // 6. StatsGUI – a new, detailed 27-slot GUI that shows your current stats and allows upgrades with clear messages.
+    public static class StatsGUI implements Listener {
+        public static void open(Player player) {
+            Inventory gui = Bukkit.createInventory(null, 27, ChatColor.translateAlternateColorCodes('&', "&aYour Stats (Click to upgrade)"));
+
+            PlayerStats stats = PlayerStatsManager.getPlayerStats(player);
+
+            // Health item.
+            ItemStack healthItem = new ItemStack(Material.REDSTONE_BLOCK);
+            ItemMeta healthMeta = healthItem.getItemMeta();
+            String healthName = ChatColor.translateAlternateColorCodes('&', "&cHealth: " + stats.getHealth());
+            healthMeta.setDisplayName(healthName);
+            List<String> healthLore = new ArrayList<>();
+            healthLore.add(ChatColor.translateAlternateColorCodes('&', "&7Click to increase Health by 5"));
+            healthMeta.setLore(healthLore);
+            healthItem.setItemMeta(healthMeta);
+            gui.setItem(10, healthItem);
+
+            // Damage item.
+            ItemStack damageItem = new ItemStack(Material.TNT);
+            ItemMeta damageMeta = damageItem.getItemMeta();
+            String damageName = ChatColor.translateAlternateColorCodes('&', "&cDamage: " + stats.getDamage());
+            damageMeta.setDisplayName(damageName);
+            List<String> damageLore = new ArrayList<>();
+            damageLore.add(ChatColor.translateAlternateColorCodes('&', "&7Click to increase Damage by 1"));
+            damageMeta.setLore(damageLore);
+            damageItem.setItemMeta(damageMeta);
+            gui.setItem(11, damageItem);
+
+            // Speed item.
+            ItemStack speedItem = new ItemStack(Material.FEATHER);
+            ItemMeta speedMeta = speedItem.getItemMeta();
+            String speedName = ChatColor.translateAlternateColorCodes('&', "&cSpeed: " + stats.getSpeed());
+            speedMeta.setDisplayName(speedName);
+            List<String> speedLore = new ArrayList<>();
+            speedLore.add(ChatColor.translateAlternateColorCodes('&', "&7Click to increase Speed by 0.02"));
+            speedMeta.setLore(speedLore);
+            speedItem.setItemMeta(speedMeta);
+            gui.setItem(12, speedItem);
+
+            // Defense item.
+            ItemStack defenseItem = new ItemStack(Material.IRON_CHESTPLATE);
+            ItemMeta defenseMeta = defenseItem.getItemMeta();
+            String defenseName = ChatColor.translateAlternateColorCodes('&', "&cDefense: " + stats.getDefense());
+            defenseMeta.setDisplayName(defenseName);
+            List<String> defenseLore = new ArrayList<>();
+            defenseLore.add(ChatColor.translateAlternateColorCodes('&', "&7Click to increase Defense by 0.5"));
+            defenseMeta.setLore(defenseLore);
+            defenseItem.setItemMeta(defenseMeta);
+            gui.setItem(13, defenseItem);
+
+            player.openInventory(gui);
+        }
+
+        @EventHandler
+        public void onInventoryClick(InventoryClickEvent event) {
+            if (!event.getView().getTitle().contains("Your Stats")) return;
+            event.setCancelled(true);
+            if (event.getCurrentItem() == null || event.getCurrentItem().getType() == Material.AIR) return;
+            Player player = (Player) event.getWhoClicked();
+            String clickedItem = ChatColor.stripColor(event.getCurrentItem().getItemMeta().getDisplayName());
+            PlayerStats stats = PlayerStatsManager.getPlayerStats(player);
+
+            if(clickedItem.contains("Health")){
+                stats.setHealth(stats.getHealth() + 5.0);
+                stats.applyToPlayer(player);
+                player.sendMessage(ChatColor.GREEN + "Your Health increased by 5.0!");
+            } else if(clickedItem.contains("Damage")){
+                stats.setDamage(stats.getDamage() + 1.0);
+                stats.applyToPlayer(player);
+                player.sendMessage(ChatColor.GREEN + "Your Damage increased by 1.0!");
+            } else if(clickedItem.contains("Speed")){
+                stats.setSpeed(stats.getSpeed() + 0.02);
+                stats.applyToPlayer(player);
+                player.sendMessage(ChatColor.GREEN + "Your Speed increased by 0.02!");
+            } else if(clickedItem.contains("Defense")){
+                stats.setDefense(stats.getDefense() + 0.5);
+                stats.applyToPlayer(player);
+                player.sendMessage(ChatColor.GREEN + "Your Defense increased by 0.5!");
+            }
+
+            // Refresh the GUI with updated stats.
+            open(player);
+        }
+    }
+
+    // 7. AdminStatsGUI lets admins view and modify a player's stats in an expanded (27-slot) GUI.
     public static class AdminStatsGUI implements Listener {
         public static void open(Player admin, Player target) {
             int size = 27;
@@ -399,7 +503,7 @@ public class SandCore extends JavaPlugin {
         }
     }
 
-    // 7. PlayerDataManager handles persistent loading/saving of player data.
+    // 8. PlayerDataManager handles persistent loading/saving of player data.
     public static class PlayerDataManager {
         private static File playerDataFile;
         private static FileConfiguration playerDataConfig;
@@ -426,7 +530,7 @@ public class SandCore extends JavaPlugin {
                     } catch (IllegalArgumentException e) { }
                 }
             }
-            // Load player levels.
+            // Load player levels (legacy, if any).
             if (playerDataConfig.contains("levels")) {
                 ConfigurationSection levelsSection = playerDataConfig.getConfigurationSection("levels");
                 for (String uuidStr : levelsSection.getKeys(false)) {
@@ -468,7 +572,7 @@ public class SandCore extends JavaPlugin {
         }
     }
 
-    // 8. PlayerLevelManager handles player levels and skill points.
+    // 9. PlayerLevelManager handles basic level and skill point storage (legacy).
     public static class PlayerLevelManager {
         public static Map<UUID, Integer> playerLevels = new HashMap<>();
         public static Map<UUID, Integer> playerSkillPoints = new HashMap<>();
@@ -496,7 +600,7 @@ public class SandCore extends JavaPlugin {
         }
     }
 
-    // 9. Commands handles all command logic and tab auto-completion.
+    // 10. Commands handles all command logic, tab auto-completion, and now the new xp command.
     public static class Commands implements CommandExecutor, TabCompleter {
         @Override
         public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
@@ -544,7 +648,7 @@ public class SandCore extends JavaPlugin {
                     break;
                 case "stats":
                     if (args.length == 0) {
-                        player.sendMessage(ChatColor.YELLOW + "Usage: /stats <upgrade|add>");
+                        player.sendMessage(ChatColor.YELLOW + "Usage: /stats <upgrade|add|view>");
                         return true;
                     }
                     subCmd = args[0].toLowerCase();
@@ -565,6 +669,8 @@ public class SandCore extends JavaPlugin {
                         } catch (NumberFormatException e) {
                             player.sendMessage(ChatColor.RED + "Amount must be a number.");
                         }
+                    } else if (subCmd.equals("view")) {
+                        StatsGUI.open(player);
                     } else {
                         player.sendMessage(ChatColor.RED + "Unknown subcommand.");
                     }
@@ -584,6 +690,39 @@ public class SandCore extends JavaPlugin {
                         return true;
                     }
                     AdminStatsGUI.open(player, target);
+                    break;
+                case "xp":
+                    if (args.length < 2) {
+                        player.sendMessage(ChatColor.YELLOW + "Usage: /xp <combat|lumber|mining|fishing> <amount>");
+                        return true;
+                    }
+                    String skillStr = args[0].toLowerCase();
+                    int xpToAdd;
+                    try {
+                        xpToAdd = Integer.parseInt(args[1]);
+                    } catch (NumberFormatException e) {
+                        player.sendMessage(ChatColor.RED + "Amount must be a number.");
+                        return true;
+                    }
+                    LevelManager.SkillType skillType;
+                    switch (skillStr) {
+                        case "combat":
+                            skillType = LevelManager.SkillType.COMBAT;
+                            break;
+                        case "lumber":
+                            skillType = LevelManager.SkillType.LUMBER;
+                            break;
+                        case "mining":
+                            skillType = LevelManager.SkillType.MINING;
+                            break;
+                        case "fishing":
+                            skillType = LevelManager.SkillType.FISHING;
+                            break;
+                        default:
+                            player.sendMessage(ChatColor.RED + "Unknown skill type. Use combat, lumber, mining, or fishing.");
+                            return true;
+                    }
+                    LevelManager.addExperience(player, skillType, xpToAdd);
                     break;
                 default:
                     player.sendMessage(ChatColor.RED + "Unknown command.");
@@ -606,6 +745,7 @@ public class SandCore extends JavaPlugin {
                 if (args.length == 1) {
                     completions.add("upgrade");
                     completions.add("add");
+                    completions.add("view");
                 }
             } else if (cmd.equals("adminstats")) {
                 if (args.length == 1) {
@@ -613,12 +753,19 @@ public class SandCore extends JavaPlugin {
                         completions.add(p.getName());
                     }
                 }
+            } else if (cmd.equals("xp")) {
+                if (args.length == 1) {
+                    completions.add("combat");
+                    completions.add("lumber");
+                    completions.add("mining");
+                    completions.add("fishing");
+                }
             }
             return completions;
         }
     }
 
-    // 10. ReloadCommand handles /screload to reload the configuration.
+    // 11. ReloadCommand handles /screload to reload the configuration.
     public class ReloadCommand implements CommandExecutor {
         @Override
         public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
@@ -631,6 +778,223 @@ public class SandCore extends JavaPlugin {
             String msg = getConfig().getString("ui.reload-message", "&#FFD700Config reloaded!").replace("%version%", version);
             sender.sendMessage(ChatColorUtil.translateHexColorCodes(msg));
             return true;
+        }
+    }
+
+    // ===============================
+    // New Leveling System and BossBar
+    // ===============================
+
+    // A. PlayerLevelData holds detailed leveling data.
+    public static class PlayerLevelData {
+        private int combatLevel;
+        private double combatXP;
+        private int lumberLevel;
+        private double lumberXP;
+        private int miningLevel;
+        private double miningXP;
+        private int fishingLevel;
+        private double fishingXP;
+
+        public PlayerLevelData() {
+            this.combatLevel = 1;
+            this.combatXP = 0.0;
+            this.lumberLevel = 1;
+            this.lumberXP = 0.0;
+            this.miningLevel = 1;
+            this.miningXP = 0.0;
+            this.fishingLevel = 1;
+            this.fishingXP = 0.0;
+        }
+
+        public int getCombatLevel() { return combatLevel; }
+        public void setCombatLevel(int combatLevel) { this.combatLevel = combatLevel; }
+        public double getCombatXP() { return combatXP; }
+        public void setCombatXP(double combatXP) { this.combatXP = combatXP; }
+        public int getLumberLevel() { return lumberLevel; }
+        public void setLumberLevel(int lumberLevel) { this.lumberLevel = lumberLevel; }
+        public double getLumberXP() { return lumberXP; }
+        public void setLumberXP(double lumberXP) { this.lumberXP = lumberXP; }
+        public int getMiningLevel() { return miningLevel; }
+        public void setMiningLevel(int miningLevel) { this.miningLevel = miningLevel; }
+        public double getMiningXP() { return miningXP; }
+        public void setMiningXP(double miningXP) { this.miningXP = miningXP; }
+        public int getFishingLevel() { return fishingLevel; }
+        public void setFishingLevel(int fishingLevel) { this.fishingLevel = fishingLevel; }
+        public double getFishingXP() { return fishingXP; }
+        public void setFishingXP(double fishingXP) { this.fishingXP = fishingXP; }
+    }
+
+    // B. LevelManager manages XP/levels and persistent storage in leveldata.yml.
+    public static class LevelManager {
+        public enum SkillType {
+            COMBAT, LUMBER, MINING, FISHING
+        }
+        private static Map<UUID, PlayerLevelData> levelData = new HashMap<>();
+        private static File levelDataFile;
+        private static FileConfiguration levelConfig;
+
+        public static void loadData() {
+            levelDataFile = new File(getInstance().getDataFolder(), "leveldata.yml");
+            if (!levelDataFile.exists()) {
+                try {
+                    levelDataFile.createNewFile();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            levelConfig = YamlConfiguration.loadConfiguration(levelDataFile);
+            for (String key : levelConfig.getKeys(false)) {
+                UUID uuid;
+                try {
+                    uuid = UUID.fromString(key);
+                } catch (IllegalArgumentException e) {
+                    continue;
+                }
+                PlayerLevelData data = new PlayerLevelData();
+                data.setCombatLevel(levelConfig.getInt(key + ".combatLevel", 1));
+                data.setCombatXP(levelConfig.getDouble(key + ".combatXP", 0.0));
+                data.setLumberLevel(levelConfig.getInt(key + ".lumberLevel", 1));
+                data.setLumberXP(levelConfig.getDouble(key + ".lumberXP", 0.0));
+                data.setMiningLevel(levelConfig.getInt(key + ".miningLevel", 1));
+                data.setMiningXP(levelConfig.getDouble(key + ".miningXP", 0.0));
+                data.setFishingLevel(levelConfig.getInt(key + ".fishingLevel", 1));
+                data.setFishingXP(levelConfig.getDouble(key + ".fishingXP", 0.0));
+                levelData.put(uuid, data);
+            }
+        }
+
+        public static void saveData() {
+            for (Map.Entry<UUID, PlayerLevelData> entry : levelData.entrySet()) {
+                String key = entry.getKey().toString();
+                PlayerLevelData data = entry.getValue();
+                levelConfig.set(key + ".combatLevel", data.getCombatLevel());
+                levelConfig.set(key + ".combatXP", data.getCombatXP());
+                levelConfig.set(key + ".lumberLevel", data.getLumberLevel());
+                levelConfig.set(key + ".lumberXP", data.getLumberXP());
+                levelConfig.set(key + ".miningLevel", data.getMiningLevel());
+                levelConfig.set(key + ".miningXP", data.getMiningXP());
+                levelConfig.set(key + ".fishingLevel", data.getFishingLevel());
+                levelConfig.set(key + ".fishingXP", data.getFishingXP());
+            }
+            try {
+                levelConfig.save(levelDataFile);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        public static PlayerLevelData getPlayerLevelData(Player player) {
+            return levelData.computeIfAbsent(player.getUniqueId(), uuid -> new PlayerLevelData());
+        }
+
+        public static void addExperience(Player player, SkillType skill, int xpToAdd) {
+            PlayerLevelData data = getPlayerLevelData(player);
+            double currentXP = 0.0;
+            int currentLevel = 0;
+            double xpPerLevel = 0.0;
+            FileConfiguration config = getInstance().getConfig();
+            switch (skill) {
+                case COMBAT:
+                    currentXP = data.getCombatXP();
+                    currentLevel = data.getCombatLevel();
+                    xpPerLevel = config.getDouble("leveling.combat.xp_per_level", 1000);
+                    break;
+                case LUMBER:
+                    currentXP = data.getLumberXP();
+                    currentLevel = data.getLumberLevel();
+                    xpPerLevel = config.getDouble("leveling.skills.lumber.xp_per_level", 500);
+                    break;
+                case MINING:
+                    currentXP = data.getMiningXP();
+                    currentLevel = data.getMiningLevel();
+                    xpPerLevel = config.getDouble("leveling.skills.mining.xp_per_level", 500);
+                    break;
+                case FISHING:
+                    currentXP = data.getFishingXP();
+                    currentLevel = data.getFishingLevel();
+                    xpPerLevel = config.getDouble("leveling.skills.fishing.xp_per_level", 300);
+                    break;
+            }
+            currentXP += xpToAdd;
+            boolean leveledUp = false;
+            while (currentXP >= xpPerLevel) {
+                currentXP -= xpPerLevel;
+                currentLevel++;
+                leveledUp = true;
+            }
+            switch (skill) {
+                case COMBAT:
+                    data.setCombatXP(currentXP);
+                    data.setCombatLevel(currentLevel);
+                    break;
+                case LUMBER:
+                    data.setLumberXP(currentXP);
+                    data.setLumberLevel(currentLevel);
+                    break;
+                case MINING:
+                    data.setMiningXP(currentXP);
+                    data.setMiningLevel(currentLevel);
+                    break;
+                case FISHING:
+                    data.setFishingXP(currentXP);
+                    data.setFishingLevel(currentLevel);
+                    break;
+            }
+            if (leveledUp) {
+                player.sendMessage(ChatColor.GOLD + "Congratulations! Your " + skill.name().toLowerCase() + " skill leveled up to " + currentLevel + "!");
+            } else {
+                player.sendMessage(ChatColor.BLUE + "You gained " + xpToAdd + " XP in " + skill.name().toLowerCase() + " (" + currentXP + "/" + xpPerLevel + " XP)");
+            }
+            if (skill == SkillType.COMBAT) {
+                LevelBarManager.updateLevelBar(player, Math.min(Math.max(currentXP / xpPerLevel, 0.0), 1.0), currentLevel);
+            }
+            // Save asynchronously.
+            new org.bukkit.scheduler.BukkitRunnable() {
+                @Override
+                public void run() {
+                    saveData();
+                }
+            }.runTaskAsynchronously(getInstance());
+        }
+    }
+
+    // C. LevelBarManager displays a BossBar for combat progression.
+    public static class LevelBarManager {
+        private static Map<UUID, BossBar> bossBars = new HashMap<>();
+
+        public static void updateLevelBar(Player player, double progress, int level) {
+            BossBar bar = bossBars.get(player.getUniqueId());
+            if (bar == null) {
+                bar = Bukkit.createBossBar(ChatColor.GREEN + "Combat Level: " + level, BarColor.BLUE, BarStyle.SOLID);
+                bossBars.put(player.getUniqueId(), bar);
+                bar.addPlayer(player);
+            } else {
+                bar.setTitle(ChatColor.GREEN + "Combat Level: " + level);
+            }
+            bar.setProgress(Math.min(Math.max(progress, 0.0), 1.0));
+        }
+
+        public static void removeLevelBar(Player player) {
+            BossBar bar = bossBars.remove(player.getUniqueId());
+            if (bar != null) {
+                bar.removeAll();
+            }
+        }
+    }
+
+    // D. LevelListener hides vanilla XP and sets up the BossBar on join.
+    public static class LevelListener implements Listener {
+        @EventHandler
+        public void onPlayerJoin(PlayerJoinEvent event) {
+            Player player = event.getPlayer();
+            // Hide vanilla XP.
+            player.setLevel(0);
+            player.setExp(0);
+            PlayerLevelData data = LevelManager.getPlayerLevelData(player);
+            double xpPerLevel = getInstance().getConfig().getDouble("leveling.combat.xp_per_level", 1000);
+            double progress = data.getCombatXP() / xpPerLevel;
+            LevelBarManager.updateLevelBar(player, Math.min(Math.max(progress, 0.0), 1.0), data.getCombatLevel());
         }
     }
 }
