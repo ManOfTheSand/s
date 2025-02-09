@@ -30,10 +30,17 @@
                 <enabled>false</enabled>
             </snapshots>
         </repository>
+
+        <repository>
+            <id>jitpack</id>
+            <url>https://jitpack.io/</url>
+        </repository>
+
         <repository>
             <id>spigot-repo</id>
             <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
         </repository>
+
         <repository>
             <id>papermc</id>
             <url>https://repo.papermc.io/repository/maven-public/</url>
@@ -50,7 +57,14 @@
                 <enabled>false</enabled>
             </snapshots>
         </repository>
-
+        <repository>
+            <id>codemc-releases</id>
+            <url>https://repo.codemc.io/repository/maven-releases/</url>
+        </repository>
+        <repository>
+            <id>codemc</id>
+            <url>https://repo.codemc.io/repository/maven-public/</url>
+        </repository>
         <!-- Purpur Snapshots Repository -->
         <repository>
             <id>purpur-snapshots</id>
@@ -63,7 +77,6 @@
                 <enabled>true</enabled>
             </snapshots>
         </repository>
-
         <!-- Minecraft Libraries Repository for Mojang artifacts such as brigadier -->
         <repository>
             <id>minecraft-libraries</id>
@@ -120,12 +133,35 @@
             <artifactId>adventure-api</artifactId>
             <version>4.18.0</version>
         </dependency>
-
         <!-- SnakeYAML for YAML configuration -->
         <dependency>
             <groupId>org.yaml</groupId>
             <artifactId>snakeyaml</artifactId>
             <version>1.33</version>
+        </dependency>
+        <dependency>
+            <groupId>xyz.gmitch215.socketmc</groupId>
+            <artifactId>socketmc-core</artifactId>
+            <version>1.21-0.3.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>xyz.gmitch215.socketmc</groupId>
+            <artifactId>socketmc-spigot</artifactId>
+            <version>1.21-0.3.1</version>
+        </dependency>
+
+        <!-- Alternatively, use the Paper Build instead of Spigot -->
+        <dependency>
+            <groupId>xyz.gmitch215.socketmc</groupId>
+            <artifactId>socketmc-paper</artifactId>
+            <version>1.21-0.3.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.decentsoftware-eu</groupId>
+            <artifactId>decentholograms</artifactId>
+            <version>2.8.12</version>
+            <scope>provided</scope>
         </dependency>
     </dependencies>
 

@@ -1,4 +1,4 @@
-package com.sandcore.mmo;
+package com.sandcore;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;

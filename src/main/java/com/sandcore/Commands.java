@@ -1,94 +1,50 @@
-package com.sandcore.mmo.commands;
+package com.sandcore.commands;
 
-import com.sandcore.mmo.PlayerClassManager;
-import com.sandcore.mmo.PlayerStatPointsManager;
-import com.sandcore.mmo.PlayerStats;
-import com.sandcore.mmo.PlayerStatsManager;
-import com.sandcore.mmo.gui.ClassSelectionGUI;
-import com.sandcore.mmo.gui.StatsUpgradeGUI;
+import com.sandcore.SandCore;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 
-public class Commands implements CommandExecutor {
+import java.util.ArrayList;
+import java.util.List;
+
+public class Commands implements CommandExecutor, TabCompleter {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "Only players can use these commands.");
+        // Use command name (lowercase) to distinguish command actions
+        String cmdName = command.getName().toLowerCase();
+        if (cmdName.equals("screload")) {
+            // Reload command for updating the config on the fly
+            if (sender instanceof Player && !sender.hasPermission("sandcore.reload")) {
+                sender.sendMessage(ChatColor.RED + "You do not have permission.");
+                return true;
+            }
+            SandCore.getInstance().reloadConfig();
+            sender.sendMessage(ChatColor.toMM("#00FF00") + "SandCore configuration reloaded!");
+            return true;
+        } else if (cmdName.equals("skilltree")) {
+            // Spawn the hologram-based skill tree near the player
+            if (!(sender instanceof Player)) {
+                sender.sendMessage("Only players can use this command.");
+                return true;
+            }
+            com.sandcore.holograms.SkillTreeHologram.spawnForPlayer((Player) sender);
             return true;
         }
-        Player player = (Player) sender;
-
-        // To keep things organized, we'll use two main command names: "class" and "stats"
-        if (command.getName().equalsIgnoreCase("class")) {
-            if (args.length == 0) {
-                player.sendMessage(ChatColor.YELLOW + "Usage: /class <select|info|addcp>");
-                return true;
-            }
-            String subCmd = args[0].toLowerCase();
-            if (subCmd.equals("select")) {
-                // Open the class selection GUI.
-                ClassSelectionGUI.open(player);
-            } else if (subCmd.equals("info")) {
-                String currentClass = PlayerClassManager.getPlayerClass(player);
-                int cp = PlayerClassManager.getClassChangePoints(player);
-                PlayerStats stats = PlayerStatsManager.getPlayerStats(player);
-                player.sendMessage(ChatColor.AQUA + "Your class: " + (currentClass == null ? "None" : currentClass));
-                player.sendMessage(ChatColor.AQUA + "Class Change Points: " + cp);
-                player.sendMessage(ChatColor.AQUA + "Stats: " + stats.toString());
-            } else if (subCmd.equals("addcp")) {
-                // Usage: /class addcp <amount> (admin only)
-                if (args.length < 2) {
-                    player.sendMessage(ChatColor.RED + "Usage: /class addcp <amount>");
-                    return true;
-                }
-                try {
-                    int amount = Integer.parseInt(args[1]);
-                    if (player.hasPermission("sandcore.admin")) {
-                        PlayerClassManager.addClassChangePoints(player, amount);
-                        player.sendMessage(ChatColor.GREEN + "Added " + amount + " class change point(s).");
-                    } else {
-                        player.sendMessage(ChatColor.RED + "You don't have permission.");
-                    }
-                } catch (NumberFormatException e) {
-                    player.sendMessage(ChatColor.RED + "Amount must be a number.");
-                }
-            } else {
-                player.sendMessage(ChatColor.RED + "Unknown subcommand.");
-            }
-        } else if (command.getName().equalsIgnoreCase("stats")) {
-            if (args.length == 0) {
-                player.sendMessage(ChatColor.YELLOW + "Usage: /stats <upgrade|add>");
-                return true;
-            }
-            String subCmd = args[0].toLowerCase();
-            if (subCmd.equals("upgrade")) {
-                // Open the stats upgrade GUI.
-                StatsUpgradeGUI.open(player);
-            } else if (subCmd.equals("add")) {
-                // Usage: /stats add <amount> (admin only)
-                if (args.length < 2) {
-                    player.sendMessage(ChatColor.RED + "Usage: /stats add <amount>");
-                    return true;
-                }
-                try {
-                    int amount = Integer.parseInt(args[1]);
-                    if (player.hasPermission("sandcore.admin")) {
-                        PlayerStatPointsManager.addStatPoints(player, amount);
-                        player.sendMessage(ChatColor.GREEN + "Added " + amount + " stat point(s).");
-                    } else {
-                        player.sendMessage(ChatColor.RED + "You don't have permission.");
-                    }
-                } catch (NumberFormatException e) {
-                    player.sendMessage(ChatColor.RED + "Amount must be a number.");
-                }
-            } else {
-                player.sendMessage(ChatColor.RED + "Unknown subcommand.");
-            }
-        }
+        // Add other commands (class, stats, adminstats, etc.) as needed.
+        sender.sendMessage(ChatColor.RED + "Unknown command.");
         return true;
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        // Return tab-complete suggestions based on the command.
+        List<String> completions = new ArrayList<>();
+        // For instance, you could complete "screload" or "skilltree" commands if necessary.
+        return completions;
     }
 }
