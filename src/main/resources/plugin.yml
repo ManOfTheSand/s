@@ -1,5 +1,5 @@
 name: SandCore
-main: com.sandcore.mmo.SandCore
+main: com.sandcore.SandCore
 version: 1.0
 api-version: 1.21
 commands:
@@ -23,4 +23,4 @@ dependencies:
   server:
     DecentHolograms:
       load: BEFORE
-      required: false # This is the default when not present
+      required: true # This is the default when not present
