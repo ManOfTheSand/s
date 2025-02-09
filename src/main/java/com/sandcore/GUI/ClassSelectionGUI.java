@@ -1,94 +1,118 @@
 package com.sandcore;
 
-import com.sandcore.utils.ChatColorUtil;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
+import org.bukkit.event.EventHandler;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 public class ClassSelectionGUI implements Listener {
 
-    public static void open(Player player) {
-        // Load the classes configuration from classes.yml
-        File classesFile = new File(SandCore.getInstance().getDataFolder(), "classes.yml");
-        YamlConfiguration classesConfig = YamlConfiguration.loadConfiguration(classesFile);
-        ConfigurationSection classSection = classesConfig.getConfigurationSection("classes");
+    private Inventory inv;
 
-        // Determine inventory size. For simplicity, we'll use 9 slots (one row)
-        int inventorySize = 9;
-        // Set the title (use ui.header or a specific title)
-        String title = ChatColorUtil.translateHexColorCodes("&#FFD700Select Your Class");
-        Inventory gui = Bukkit.createInventory(null, inventorySize, title);
-
-        // Retrieve extra space slot indices from the main config
-        List<Integer> extraSpaceSlots = SandCore.getInstance().getConfig().getIntegerList("ui.extra_space_slots");
-        Set<Integer> spacerSlots = new HashSet<>(extraSpaceSlots);
-
-        // Prepare the list of class items
-        List<ItemStack> classItems = new ArrayList<>();
-        if (classSection != null) {
-            for (String classKey : classSection.getKeys(false)) {
-                ConfigurationSection cs = classSection.getConfigurationSection(classKey);
-                if (cs == null) continue;
-                String materialStr = cs.getString("material", "PAPER").toUpperCase();
-                Material material = Material.getMaterial(materialStr);
-                if (material == null) {
-                    material = Material.PAPER;
-                }
-                String displayName = cs.getString("display_name", classKey);
-                List<String> lore = cs.getStringList("lore");
-
-                ItemStack item = new ItemStack(material);
-                ItemMeta meta = item.getItemMeta();
-                meta.setDisplayName(ChatColorUtil.translateHexColorCodes(displayName));
-                if (lore != null && !lore.isEmpty()) {
-                    List<String> coloredLore = new ArrayList<>();
-                    for (String line : lore) {
-                        coloredLore.add(ChatColorUtil.translateHexColorCodes(line));
-                    }
-                    meta.setLore(coloredLore);
-                }
-                item.setItemMeta(meta);
-                classItems.add(item);
-            }
-        }
-
-        // Create a filler item (spacer) for extra spacing in the GUI. For example, a dark glass pane.
-        ItemStack filler = new ItemStack(Material.BLACK_STAINED_GLASS_PANE);
-        ItemMeta fillerMeta = filler.getItemMeta();
-        fillerMeta.setDisplayName(" ");
-        filler.setItemMeta(fillerMeta);
-
-        // Fill the inventory: for each slot from 0 to inventorySize - 1, if it's in the spacer slots, add a filler; otherwise, use the next class item if available.
-        int classIndex = 0;
-        for (int slot = 0; slot < inventorySize; slot++) {
-            if (spacerSlots.contains(slot)) {
-                gui.setItem(slot, filler);
-            } else {
-                if (classIndex < classItems.size()) {
-                    gui.setItem(slot, classItems.get(classIndex));
-                    classIndex++;
-                }
-            }
-        }
-
-        player.openInventory(gui);
+    public ClassSelectionGUI() {
+        createGUI();
     }
 
-    // Optionally, add your InventoryClickEvent handler here to process clicks.
+    public void createGUI() {
+        // Load Class Selection GUI configuration
+        ConfigurationSection guiConfig = SandCore.getInstance().getConfig().getConfigurationSection("guis.class_selection");
+        int size = guiConfig.getInt("size", 27);
+        String title = ChatColor.translateAlternateColorCodes('&', guiConfig.getString("title", "Select Your Class"));
+        inv = Bukkit.createInventory(null, size, title);
+
+        // Fill inventory with filler items from configuration.
+        ConfigurationSection fillerConfig = guiConfig.getConfigurationSection("filler");
+        if (fillerConfig != null) {
+            ItemStack filler = createItem(fillerConfig);
+            for (int i = 0; i < size; i++) {
+                inv.setItem(i, filler);
+            }
+        }
+
+        // Load classes from classes.yml
+        File classesFile = new File(SandCore.getInstance().getDataFolder(), "classes.yml");
+        YamlConfiguration classesConfig = YamlConfiguration.loadConfiguration(classesFile);
+        ConfigurationSection classesSection = classesConfig.getConfigurationSection("classes");
+        if (classesSection == null) {
+            SandCore.getInstance().getLogger().warning("No classes found in classes.yml!");
+            return;
+        }
+
+        // Retrieve the list of icon slots from configuration.
+        List<Integer> iconSlots = guiConfig.getIntegerList("icon_slots");
+        Set<String> classKeys = classesSection.getKeys(false);
+        int slotIndex = 0;
+        for (String key : classKeys) {
+            ConfigurationSection classSection = classesSection.getConfigurationSection(key);
+            // Create the item representing the class.
+            Material mat = Material.getMaterial(classSection.getString("material", "STONE"));
+            ItemStack classItem = new ItemStack(mat);
+            ItemMeta meta = classItem.getItemMeta();
+            meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', classSection.getString("display_name", key)));
+            List<String> lore = classSection.getStringList("lore");
+            for (int i = 0; i < lore.size(); i++) {
+                lore.set(i, ChatColor.translateAlternateColorCodes('&', lore.get(i)));
+            }
+            meta.setLore(lore);
+            classItem.setItemMeta(meta);
+
+            // Place the class item in the configured icon slot, or choose a fallback slot.
+            if (slotIndex < iconSlots.size()) {
+                int slot = iconSlots.get(slotIndex);
+                inv.setItem(slot, classItem);
+            } else {
+                for (int i = 0; i < inv.getSize(); i++) {
+                    if (inv.getItem(i) == null || inv.getItem(i).getType() == Material.AIR) {
+                        inv.setItem(i, classItem);
+                        break;
+                    }
+                }
+            }
+            slotIndex++;
+        }
+    }
+
+    private ItemStack createItem(ConfigurationSection section) {
+        Material material = Material.getMaterial(section.getString("material", "BLACK_STAINED_GLASS_PANE"));
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', section.getString("display_name", " ")));
+        List<String> lore = section.getStringList("lore");
+        for (int i = 0; i < lore.size(); i++) {
+            lore.set(i, ChatColor.translateAlternateColorCodes('&', lore.get(i)));
+        }
+        meta.setLore(lore);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    // Open the Class Selection GUI for a given player.
+    public void openGUI(Player player) {
+        player.openInventory(inv);
+    }
+
+    @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        // Your event handling logic
+        if (event.getInventory().equals(inv)) {
+            event.setCancelled(true);
+            if (event.getCurrentItem() != null && event.getCurrentItem().hasItemMeta()) {
+                Player player = (Player) event.getWhoClicked();
+                player.sendMessage(ChatColor.GREEN + "You selected the class: " + event.getCurrentItem().getItemMeta().getDisplayName());
+                // Here you can add code to assign the class to the player.
+                player.closeInventory();
+            }
+        }
     }
 }
