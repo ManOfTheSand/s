@@ -1,16 +1,72 @@
+# Default configuration for SandCore Plugin
+
+# Classes configuration:
+# Define all available classes, their GUI display properties, and stat modifications.
 classes:
   warrior:
+    material: DIAMOND_SWORD
+    display_name: "&cWarrior"
+    lore:
+      - "&7Strong and resilient."
+      - "&7Melee specialist."
     health: 30.0
     damage: 5.0
     speed: 0.1
     defense: 3.0
   mage:
+    material: BLAZE_ROD
+    display_name: "&5Mage"
+    lore:
+      - "&7Master of elemental magic."
+      - "&7Ranged spells."
     health: 20.0
     damage: 7.0
     speed: 0.1
     defense: 1.5
   archer:
+    material: BOW
+    display_name: "&aArcher"
+    lore:
+      - "&7Swift and accurate."
+      - "&7Ranged specialist."
     health: 25.0
     damage: 4.0
     speed: 0.12
     defense: 2.0
+
+# Skill Tree configuration:
+# Configure skills for the leveling system and their rewards.
+skilltree:
+  increase_health:
+    material: GOLDEN_APPLE
+    display_name: "&6Increase Health"
+    lore:
+      - "&7Gain extra health upon unlocking."
+    required_level: 2
+    reward:
+      health_increase: 5.0
+  increase_damage:
+    material: IRON_SWORD
+    display_name: "&6Increase Damage"
+    lore:
+      - "&7Boost your attack damage."
+    required_level: 3
+    reward:
+      damage_increase: 1.0
+
+# Leveling configuration:
+# Settings related to player leveling and skill point rewards.
+leveling:
+  xp_per_level: 100
+  skill_points_per_level: 1
+
+# Admin GUI configuration:
+# Settings for the admin GUI that allows data modifications.
+admin_gui:
+  size: 9
+  title: "&4Admin Stats GUI"
+
+# General plugin options:
+options:
+  debug: false
+  save_interval: 300  # seconds, auto-save interval for persistent player data
