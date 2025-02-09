@@ -19,3 +19,8 @@ permissions:
   sandcore.admin:
     description: "Allows access to admin commands."
     default: op
+dependencies:
+  server:
+    DecentHolograms:
+      load: BEFORE
+      required: false # This is the default when not present
