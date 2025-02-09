@@ -4,20 +4,25 @@
 
 # Leveling Configuration
 leveling:
-  xp_per_level: 100
+  combat:
+    xp_per_level: 1000
+  skills:
+    lumber:
+      xp_per_level: 500
+    mining:
+      xp_per_level: 500
+    fishing:
+      xp_per_level: 300
   skill_points_per_level: 1
 
 # Admin GUI Configuration
 admin_gui:
-  # The admin GUI now pulls settings from the global guis section below.
   title: '&#AA0000Admin Stats GUI - Command Over Destiny'
 
 # Global GUI Settings for all interfaces
 guis:
   default:
-    # Default overall size for GUIs (allowable values: 9, 18, 27, 36, 45, 54)
     size: 27
-    # Default background filler item used when not otherwise specified.
     background:
       material: BLACK_STAINED_GLASS_PANE
       display_name: ' '
@@ -26,14 +31,12 @@ guis:
   class_selection:
     title: '&#FFD700Select Your Class'
     size: 27
-    # Specify which slots will hold your class icons. (Middle row slots in a 27-slot GUI)
     icon_slots:
       - 10
       - 11
       - 12
       - 13
       - 14
-    # Filler configuration for slots not used by class icons.
     filler:
       material: BLACK_STAINED_GLASS_PANE
       display_name: ' '
@@ -42,7 +45,6 @@ guis:
   admin:
     title: '&#AA0000Admin Stats GUI - Command Over Destiny'
     size: 27
-    # Arrange admin items in a centered row (you can later customize with additional lore)
     icon_slots:
       - 10
       - 11
