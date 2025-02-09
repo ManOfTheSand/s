@@ -30,6 +30,11 @@ public class SandCore extends JavaPlugin {
         // Register command executors.
         getCommand("class").setExecutor(new Commands());
         getCommand("stats").setExecutor(new Commands());
+
+        // Super cool start up message in the terminal
+        getLogger().info("************************************************");
+        getLogger().info("Super Cool Start Up Message: SandCore Plugin Loaded!");
+        getLogger().info("************************************************");
     }
 
     // ================== PlayerStats Class ==================
