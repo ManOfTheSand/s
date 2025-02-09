@@ -9,14 +9,16 @@ public class PlayerStats {
     private double speed;
     private double defense;
 
+    // No-argument constructor (kept for compatibility)
     public PlayerStats() {
-        // Default values
+        // Default stat values
         this.health = 20.0;
         this.damage = 2.0;
         this.speed = 0.1;
         this.defense = 0.0;
     }
 
+    // New overloaded constructor for initializing with specific values
     public PlayerStats(double health, double damage, double speed, double defense) {
         this.health = health;
         this.damage = damage;
@@ -25,33 +27,41 @@ public class PlayerStats {
     }
 
     // Getters and setters
+
     public double getHealth() {
         return health;
     }
+
     public void setHealth(double health) {
         this.health = health;
     }
+
     public double getDamage() {
         return damage;
     }
+
     public void setDamage(double damage) {
         this.damage = damage;
     }
+
     public double getSpeed() {
         return speed;
     }
+
     public void setSpeed(double speed) {
         this.speed = speed;
     }
+
     public double getDefense() {
         return defense;
     }
+
     public void setDefense(double defense) {
         this.defense = defense;
     }
 
     /**
-     * Apply these stats to the corresponding player attributes.
+     * Apply these stats to the player's attributes.
      */
     public void applyToPlayer(Player player) {
         if (player.getAttribute(Attribute.MAX_HEALTH) != null) {
