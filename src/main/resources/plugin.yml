@@ -3,12 +3,15 @@ main: com.sandcore.mmo.SandCore
 version: 1.0
 commands:
   class:
-    description: "Manage class selection and info."
+    description: "Manage your class selection"
     usage: "/class <select|info|addcp>"
   stats:
-    description: "Manage stat upgrades."
+    description: "Manage your stat upgrades"
     usage: "/stats <upgrade|add>"
+  adminstats:
+    description: "Admin command to manage a player's stats"
+    usage: "/adminstats <player>"
 permissions:
   sandcore.admin:
-    description: "Allows administrative commands for SandCore."
+    description: "Allows access to admin commands"
     default: op
