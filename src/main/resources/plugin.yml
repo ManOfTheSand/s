@@ -1,0 +1,14 @@
+name: SandCore
+main: com.sandcore.mmo.SandCore
+version: 1.0
+api-version: 1.21
+commands:
+  stats:
+    description: Displays your MMO stats.
+    usage: /stats
+  sandcore:
+    description: Main command for SandCore.
+    usage: /sandcore
+  classselect:
+    description: Opens the class selection GUI.
+    usage: /classselect

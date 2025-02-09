@@ -1,0 +1,18 @@
+# src/main/resources/config.yml
+# Default configuration for SandCore
+
+welcome-message: "Welcome to SandCore!"
+
+classes:
+  wizard:
+    display: "&5Wizard"
+    description: "Master of arcane arts. Master spells and magic."
+    icon: "BLAZE_ROD"
+    baseHealth: 20
+    baseMana: 200
+  warrior:
+    display: "&cWarrior"
+    description: "Strong melee fighter with incredible strength."
+    icon: "IRON_SWORD"
+    baseHealth: 40
+    baseMana: 50
