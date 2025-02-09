@@ -9,6 +9,8 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -18,12 +20,13 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.*;
 
 public class SandCore extends JavaPlugin {
 
     private static SandCore instance;
-
     public static SandCore getInstance() {
         return instance;
     }
@@ -31,13 +34,16 @@ public class SandCore extends JavaPlugin {
     @Override
     public void onEnable() {
         instance = this;
-        // Save default config if it does not exist.
         saveDefaultConfig();
 
-        // Register GUIs & listeners.
-        getServer().getPluginManager().registerEvents(new ClassSelectionGUI(), this);
-        getServer().getPluginManager().registerEvents(new StatsUpgradeGUI(), this);
-        getServer().getPluginManager().registerEvents(new AdminStatsGUI(), this);
+        // Load persistent player data (class choices, levels, etc.)
+        PlayerDataManager.loadData();
+
+        // Register event listeners (GUI, skill tree, etc.)
+        Bukkit.getPluginManager().registerEvents(new ClassSelectionGUI(), this);
+        Bukkit.getPluginManager().registerEvents(new StatsUpgradeGUI(), this);
+        Bukkit.getPluginManager().registerEvents(new AdminStatsGUI(), this);
+        Bukkit.getPluginManager().registerEvents(new SkillTreeGUI(), this);
 
         // Register command executors and tab completers.
         Commands commands = new Commands();
@@ -47,18 +53,27 @@ public class SandCore extends JavaPlugin {
         getCommand("stats").setTabCompleter(commands);
         getCommand("adminstats").setExecutor(commands);
         getCommand("adminstats").setTabCompleter(commands);
+        getCommand("skilltree").setExecutor(commands);
+        getCommand("skilltree").setTabCompleter(commands);
 
-        // Super cool startup message.
+        // Startup message.
         getLogger().info("************************************************");
         getLogger().info("Super Cool Start Up Message: SandCore Plugin Loaded!");
         getLogger().info("************************************************");
     }
 
-    /*========================
-      Inner Classes and Managers
-    ========================*/
+    @Override
+    public void onDisable() {
+        // Save persistent data (player classes, levels, etc.).
+        PlayerDataManager.saveData();
+        PlayerStatsManager.saveStats();
+    }
 
-    // 1. PlayerStats class holds the stat values.
+    /*====================
+      Inner Classes & Managers
+    ====================*/
+
+    // 1. PlayerStats holds stat values.
     public static class PlayerStats {
         private double health;
         private double damage;
@@ -79,43 +94,17 @@ public class SandCore extends JavaPlugin {
             this.defense = defense;
         }
 
-        public double getHealth() {
-            return health;
-        }
+        public double getHealth() { return health; }
+        public void setHealth(double health) { this.health = health; }
+        public double getDamage() { return damage; }
+        public void setDamage(double damage) { this.damage = damage; }
+        public double getSpeed() { return speed; }
+        public void setSpeed(double speed) { this.speed = speed; }
+        public double getDefense() { return defense; }
+        public void setDefense(double defense) { this.defense = defense; }
 
-        public void setHealth(double health) {
-            this.health = health;
-        }
-
-        public double getDamage() {
-            return damage;
-        }
-
-        public void setDamage(double damage) {
-            this.damage = damage;
-        }
-
-        public double getSpeed() {
-            return speed;
-        }
-
-        public void setSpeed(double speed) {
-            this.speed = speed;
-        }
-
-        public double getDefense() {
-            return defense;
-        }
-
-        public void setDefense(double defense) {
-            this.defense = defense;
-        }
-
-        /**
-         * Applies the stats to the player using the updated, non-generic attributes.
-         */
+        // Applies the stats to the player using current API attribute constants.
         public void applyToPlayer(Player player) {
-            // Use up-to-date attribute constants.
             if (player.getAttribute(Attribute.MAX_HEALTH) != null)
                 player.getAttribute(Attribute.MAX_HEALTH).setBaseValue(health);
             if (player.getAttribute(Attribute.ATTACK_DAMAGE) != null)
@@ -132,7 +121,7 @@ public class SandCore extends JavaPlugin {
         }
     }
 
-    // 2. PlayerStatsManager handles retrieving, updating, and saving player stats.
+    // 2. PlayerStatsManager handles retrieving and saving stats.
     public static class PlayerStatsManager {
         private static Map<UUID, PlayerStats> playerStats = new HashMap<>();
 
@@ -148,29 +137,16 @@ public class SandCore extends JavaPlugin {
             playerStats.put(player.getUniqueId(), stats);
         }
 
-        // Loads class stats from the config.
-        public static void updateStatsForClass(Player player, String className) {
-            String path = "classes." + className.toLowerCase();
-            // Load configurable stats; defaults provided if config value missing.
-            double health = SandCore.getInstance().getConfig().getDouble(path + ".health", 20.0);
-            double damage = SandCore.getInstance().getConfig().getDouble(path + ".damage", 2.0);
-            double speed = SandCore.getInstance().getConfig().getDouble(path + ".speed", 0.1);
-            double defense = SandCore.getInstance().getConfig().getDouble(path + ".defense", 0.0);
-            PlayerStats stats = new PlayerStats(health, damage, speed, defense);
-            stats.applyToPlayer(player);
-            setPlayerStats(player, stats);
-        }
-
-        // Stub for saving stats to persistence.
+        // Stub for saving stats.
         public static void saveStats() {
-            // Implement actual persistence logic as needed.
-            System.out.println("Player stats saved!");
+            getInstance().getLogger().info("Player stats saved!");
         }
     }
 
-    // 3. PlayerClassManager for storing a player's selected class and class change points.
+    // 3. PlayerClassManager stores a player's chosen class and class change points.
     public static class PlayerClassManager {
-        private static Map<UUID, String> playerClasses = new HashMap<>();
+        // Made public for persistence.
+        public static Map<UUID, String> playerClasses = new HashMap<>();
         private static Map<UUID, Integer> classChangePoints = new HashMap<>();
 
         public static String getPlayerClass(Player player) {
@@ -179,6 +155,7 @@ public class SandCore extends JavaPlugin {
 
         public static void setPlayerClass(Player player, String className) {
             playerClasses.put(player.getUniqueId(), className);
+            PlayerDataManager.saveData(); // Persist choice immediately.
         }
 
         public static int getClassChangePoints(Player player) {
@@ -197,30 +174,31 @@ public class SandCore extends JavaPlugin {
         }
     }
 
-    // 4. ClassSelectionGUI displays a GUI for players to choose a class (loaded from config).
+    // 4. ClassSelectionGUI displays a configurable GUI for class selection.
     public static class ClassSelectionGUI implements Listener {
         public static void open(Player player) {
             Inventory gui = Bukkit.createInventory(null, 9, ChatColor.GOLD + "Select Your Class");
-            ConfigurationSection classSection = SandCore.getInstance().getConfig().getConfigurationSection("classes");
+            ConfigurationSection classSection = getInstance().getConfig().getConfigurationSection("classes");
             if (classSection != null) {
                 for (String classKey : classSection.getKeys(false)) {
-                    ItemStack item;
-                    switch (classKey.toLowerCase()) {
-                        case "warrior":
-                            item = new ItemStack(Material.DIAMOND_SWORD);
-                            break;
-                        case "mage":
-                            item = new ItemStack(Material.BLAZE_ROD);
-                            break;
-                        case "archer":
-                            item = new ItemStack(Material.BOW);
-                            break;
-                        default:
-                            item = new ItemStack(Material.PAPER);
-                            break;
-                    }
+                    ConfigurationSection cs = classSection.getConfigurationSection(classKey);
+                    // Read config values:
+                    String materialStr = cs.getString("material", "PAPER").toUpperCase();
+                    Material material = Material.getMaterial(materialStr);
+                    if(material == null) material = Material.PAPER;
+                    String displayName = cs.getString("display_name", classKey);
+                    List<String> lore = cs.getStringList("lore");
+
+                    ItemStack item = new ItemStack(material);
                     ItemMeta meta = item.getItemMeta();
-                    meta.setDisplayName(ChatColor.RESET + (classKey.substring(0, 1).toUpperCase() + classKey.substring(1)));
+                    meta.setDisplayName(ChatColor.RESET + displayName);
+                    if(lore != null && !lore.isEmpty()) {
+                        List<String> coloredLore = new ArrayList<>();
+                        for(String line : lore) {
+                            coloredLore.add(ChatColor.translateAlternateColorCodes('&', line));
+                        }
+                        meta.setLore(coloredLore);
+                    }
                     item.setItemMeta(meta);
                     gui.addItem(item);
                 }
@@ -230,69 +208,57 @@ public class SandCore extends JavaPlugin {
 
         @EventHandler
         public void onInventoryClick(InventoryClickEvent event) {
-            if (!event.getView().getTitle().equals(ChatColor.GOLD + "Select Your Class")) {
-                return;
-            }
+            if (!event.getView().getTitle().equals(ChatColor.GOLD + "Select Your Class")) return;
             event.setCancelled(true);
-            if (event.getCurrentItem() == null || event.getCurrentItem().getType() == Material.AIR) {
-                return;
-            }
+            if(event.getCurrentItem() == null || event.getCurrentItem().getType() == Material.AIR) return;
             Player player = (Player) event.getWhoClicked();
-            String className = ChatColor.stripColor(event.getCurrentItem().getItemMeta().getDisplayName()).toLowerCase();
-            if (PlayerClassManager.getClassChangePoints(player) <= 0) {
-                player.sendMessage(ChatColor.RED + "You don't have any class change points!");
-                player.closeInventory();
-                return;
-            }
-            PlayerClassManager.setPlayerClass(player, className);
-            PlayerClassManager.deductClassChangePoint(player);
-            PlayerStatsManager.updateStatsForClass(player, className);
-            player.sendMessage(ChatColor.GREEN + "Class updated to " + className + "!");
+            String chosenClass = ChatColor.stripColor(event.getCurrentItem().getItemMeta().getDisplayName()).toLowerCase();
+
+            // Persist the player's chosen class.
+            PlayerClassManager.setPlayerClass(player, chosenClass);
+            player.sendMessage(ChatColor.GREEN + "You have selected the " + chosenClass + " class!");
+            // (Optional) Update stats based on chosen class using config here.
             player.closeInventory();
         }
     }
 
-    // 5. StatsUpgradeGUI allows players to upgrade their own stats.
+    // 5. StatsUpgradeGUI for players to upgrade their stats.
     public static class StatsUpgradeGUI implements Listener {
         public static void open(Player player) {
-            Inventory inv = Bukkit.createInventory(null, 9, ChatColor.GOLD + "Upgrade Your Stats");
+            Inventory gui = Bukkit.createInventory(null, 9, ChatColor.AQUA + "Upgrade Your Stats");
 
-            ItemStack healthItem = new ItemStack(Material.REDSTONE_BLOCK);
-            ItemMeta healthMeta = healthItem.getItemMeta();
-            healthMeta.setDisplayName(ChatColor.RED + "Upgrade Health");
-            healthItem.setItemMeta(healthMeta);
-            inv.setItem(0, healthItem);
+            ItemStack health = new ItemStack(Material.REDSTONE_BLOCK);
+            ItemMeta hMeta = health.getItemMeta();
+            hMeta.setDisplayName(ChatColor.RED + "Health +5");
+            health.setItemMeta(hMeta);
+            gui.setItem(0, health);
 
-            ItemStack damageItem = new ItemStack(Material.TNT);
-            ItemMeta damageMeta = damageItem.getItemMeta();
-            damageMeta.setDisplayName(ChatColor.RED + "Upgrade Damage");
-            damageItem.setItemMeta(damageMeta);
-            inv.setItem(1, damageItem);
+            ItemStack damage = new ItemStack(Material.TNT);
+            ItemMeta dMeta = damage.getItemMeta();
+            dMeta.setDisplayName(ChatColor.RED + "Damage +1");
+            damage.setItemMeta(dMeta);
+            gui.setItem(1, damage);
 
-            ItemStack speedItem = new ItemStack(Material.FEATHER);
-            ItemMeta speedMeta = speedItem.getItemMeta();
-            speedMeta.setDisplayName(ChatColor.RED + "Upgrade Speed");
-            speedItem.setItemMeta(speedMeta);
-            inv.setItem(2, speedItem);
+            ItemStack speed = new ItemStack(Material.FEATHER);
+            ItemMeta sMeta = speed.getItemMeta();
+            sMeta.setDisplayName(ChatColor.RED + "Speed +0.02");
+            speed.setItemMeta(sMeta);
+            gui.setItem(2, speed);
 
-            ItemStack defenseItem = new ItemStack(Material.IRON_CHESTPLATE);
-            ItemMeta defenseMeta = defenseItem.getItemMeta();
-            defenseMeta.setDisplayName(ChatColor.RED + "Upgrade Defense");
-            defenseItem.setItemMeta(defenseMeta);
-            inv.setItem(3, defenseItem);
+            ItemStack defense = new ItemStack(Material.IRON_CHESTPLATE);
+            ItemMeta defMeta = defense.getItemMeta();
+            defMeta.setDisplayName(ChatColor.RED + "Defense +0.5");
+            defense.setItemMeta(defMeta);
+            gui.setItem(3, defense);
 
-            player.openInventory(inv);
+            player.openInventory(gui);
         }
 
         @EventHandler
         public void onInventoryClick(InventoryClickEvent event) {
-            if (!event.getView().getTitle().equals(ChatColor.GOLD + "Upgrade Your Stats")) {
-                return;
-            }
+            if (!event.getView().getTitle().equals(ChatColor.AQUA + "Upgrade Your Stats")) return;
             event.setCancelled(true);
-            if (event.getCurrentItem() == null || event.getCurrentItem().getType() == Material.AIR) {
-                return;
-            }
+            if (event.getCurrentItem() == null || event.getCurrentItem().getType() == Material.AIR) return;
             Player player = (Player) event.getWhoClicked();
             String stat = ChatColor.stripColor(event.getCurrentItem().getItemMeta().getDisplayName()).toLowerCase();
             PlayerStats stats = PlayerStatsManager.getPlayerStats(player);
@@ -313,41 +279,41 @@ public class SandCore extends JavaPlugin {
             if (upgraded) {
                 stats.applyToPlayer(player);
                 player.sendMessage(ChatColor.GREEN + "Stat upgraded!");
-                open(player); // Refresh the GUI
+                open(player);
             } else {
                 player.sendMessage(ChatColor.RED + "You have no available stat points!");
             }
         }
     }
 
-    // 6. AdminStatsGUI lets an admin view and modify a player's stats.
+    // 6. AdminStatsGUI lets admins view and modify a player's stats.
     public static class AdminStatsGUI implements Listener {
         public static void open(Player admin, Player target) {
             Inventory inv = Bukkit.createInventory(null, 9, ChatColor.DARK_RED + "Admin: " + target.getName() + " Stats");
             PlayerStats stats = PlayerStatsManager.getPlayerStats(target);
 
             ItemStack health = new ItemStack(Material.REDSTONE_BLOCK);
-            ItemMeta hmeta = health.getItemMeta();
-            hmeta.setDisplayName(ChatColor.RED + "Health: " + stats.getHealth());
-            health.setItemMeta(hmeta);
+            ItemMeta hMeta = health.getItemMeta();
+            hMeta.setDisplayName(ChatColor.RED + "Health: " + stats.getHealth());
+            health.setItemMeta(hMeta);
             inv.setItem(0, health);
 
             ItemStack damage = new ItemStack(Material.TNT);
-            ItemMeta dmeta = damage.getItemMeta();
-            dmeta.setDisplayName(ChatColor.RED + "Damage: " + stats.getDamage());
-            damage.setItemMeta(dmeta);
+            ItemMeta dMeta = damage.getItemMeta();
+            dMeta.setDisplayName(ChatColor.RED + "Damage: " + stats.getDamage());
+            damage.setItemMeta(dMeta);
             inv.setItem(1, damage);
 
             ItemStack speed = new ItemStack(Material.FEATHER);
-            ItemMeta smeta = speed.getItemMeta();
-            smeta.setDisplayName(ChatColor.RED + "Speed: " + stats.getSpeed());
-            speed.setItemMeta(smeta);
+            ItemMeta sMeta = speed.getItemMeta();
+            sMeta.setDisplayName(ChatColor.RED + "Speed: " + stats.getSpeed());
+            speed.setItemMeta(sMeta);
             inv.setItem(2, speed);
 
             ItemStack defense = new ItemStack(Material.IRON_CHESTPLATE);
-            ItemMeta imeta = defense.getItemMeta();
-            imeta.setDisplayName(ChatColor.RED + "Defense: " + stats.getDefense());
-            defense.setItemMeta(imeta);
+            ItemMeta defMeta = defense.getItemMeta();
+            defMeta.setDisplayName(ChatColor.RED + "Defense: " + stats.getDefense());
+            defense.setItemMeta(defMeta);
             inv.setItem(3, defense);
 
             admin.openInventory(inv);
@@ -355,17 +321,13 @@ public class SandCore extends JavaPlugin {
 
         @EventHandler
         public void onInventoryClick(InventoryClickEvent event) {
-            if (!event.getView().getTitle().startsWith(ChatColor.DARK_RED + "Admin: "))
-                return;
+            if (!event.getView().getTitle().startsWith(ChatColor.DARK_RED + "Admin: ")) return;
             event.setCancelled(true);
-            if (event.getCurrentItem() == null || event.getCurrentItem().getType() == Material.AIR)
-                return;
+            if (event.getCurrentItem() == null || event.getCurrentItem().getType() == Material.AIR) return;
             Player admin = (Player) event.getWhoClicked();
-
             String title = ChatColor.stripColor(event.getView().getTitle());
             String[] parts = title.split(" ");
-            if (parts.length < 2)
-                return;
+            if (parts.length < 2) return;
             String targetName = parts[1];
             Player target = Bukkit.getPlayerExact(targetName);
             if (target == null) {
@@ -385,11 +347,177 @@ public class SandCore extends JavaPlugin {
             }
             stats.applyToPlayer(target);
             admin.sendMessage(ChatColor.GREEN + "Stats updated for " + target.getName());
-            open(admin, target); // Refresh GUI
+            open(admin, target);
         }
     }
 
-    // 7. Commands class handles all our commands and auto-populates suggestions.
+    // 7. PlayerDataManager handles persistent loading/saving of player data.
+    public static class PlayerDataManager {
+        private static File playerDataFile;
+        private static FileConfiguration playerDataConfig;
+
+        public static void loadData() {
+            playerDataFile = new File(getInstance().getDataFolder(), "playerdata.yml");
+            if (!playerDataFile.exists()) {
+                try {
+                    playerDataFile.getParentFile().mkdirs();
+                    playerDataFile.createNewFile();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            playerDataConfig = YamlConfiguration.loadConfiguration(playerDataFile);
+            // Load saved player classes.
+            if (playerDataConfig.contains("classes")) {
+                for (String uuidStr : playerDataConfig.getConfigurationSection("classes").getKeys(false)) {
+                    String savedClass = playerDataConfig.getString("classes." + uuidStr);
+                    try {
+                        UUID uuid = UUID.fromString(uuidStr);
+                        PlayerClassManager.playerClasses.put(uuid, savedClass);
+                    } catch (IllegalArgumentException e) { }
+                }
+            }
+            // Load player levels.
+            if (playerDataConfig.contains("levels")) {
+                for (String uuidStr : playerDataConfig.getConfigurationSection("levels").getKeys(false)) {
+                    int level = playerDataConfig.getInt("levels." + uuidStr);
+                    try {
+                        UUID uuid = UUID.fromString(uuidStr);
+                        PlayerLevelManager.playerLevels.put(uuid, level);
+                    } catch (IllegalArgumentException e) { }
+                }
+            }
+            // Load player skill points.
+            if (playerDataConfig.contains("skillpoints")) {
+                for (String uuidStr : playerDataConfig.getConfigurationSection("skillpoints").getKeys(false)) {
+                    int sp = playerDataConfig.getInt("skillpoints." + uuidStr);
+                    try {
+                        UUID uuid = UUID.fromString(uuidStr);
+                        PlayerLevelManager.playerSkillPoints.put(uuid, sp);
+                    } catch (IllegalArgumentException e) { }
+                }
+            }
+        }
+
+        public static void saveData() {
+            for (Map.Entry<UUID, String> entry : PlayerClassManager.playerClasses.entrySet()) {
+                playerDataConfig.set("classes." + entry.getKey().toString(), entry.getValue());
+            }
+            for (Map.Entry<UUID, Integer> entry : PlayerLevelManager.playerLevels.entrySet()) {
+                playerDataConfig.set("levels." + entry.getKey().toString(), entry.getValue());
+            }
+            for (Map.Entry<UUID, Integer> entry : PlayerLevelManager.playerSkillPoints.entrySet()) {
+                playerDataConfig.set("skillpoints." + entry.getKey().toString(), entry.getValue());
+            }
+            try {
+                playerDataConfig.save(playerDataFile);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    // 8. PlayerLevelManager handles player levels and skill points.
+    public static class PlayerLevelManager {
+        public static Map<UUID, Integer> playerLevels = new HashMap<>();
+        public static Map<UUID, Integer> playerSkillPoints = new HashMap<>();
+
+        public static int getLevel(Player player) {
+            return playerLevels.getOrDefault(player.getUniqueId(), 1);
+        }
+
+        public static int getSkillPoints(Player player) {
+            return playerSkillPoints.getOrDefault(player.getUniqueId(), 0);
+        }
+
+        public static void addExperience(Player player, int xp) {
+            int newLevel = getLevel(player) + xp;
+            playerLevels.put(player.getUniqueId(), newLevel);
+            playerSkillPoints.put(player.getUniqueId(), getSkillPoints(player) + xp); // e.g., 1 skill point per xp
+            player.sendMessage(ChatColor.GREEN + "You've reached level " + newLevel + " and earned " + xp + " skill point(s)!");
+        }
+
+        public static void useSkillPoint(Player player) {
+            int sp = getSkillPoints(player);
+            if (sp > 0) {
+                playerSkillPoints.put(player.getUniqueId(), sp - 1);
+            }
+        }
+    }
+
+    // 9. SkillTreeGUI displays a skill tree for leveling rewards.
+    public static class SkillTreeGUI implements Listener {
+        public static void open(Player player) {
+            Inventory gui = Bukkit.createInventory(null, 27, ChatColor.LIGHT_PURPLE + "Skill Tree");
+            ConfigurationSection skillSection = getInstance().getConfig().getConfigurationSection("skilltree");
+            if (skillSection != null) {
+                int slot = 0;
+                for (String skillKey : skillSection.getKeys(false)) {
+                    ConfigurationSection cs = skillSection.getConfigurationSection(skillKey);
+                    String materialStr = cs.getString("material", "BARRIER").toUpperCase();
+                    Material material = Material.getMaterial(materialStr);
+                    if(material == null) material = Material.BARRIER;
+                    String displayName = cs.getString("display_name", skillKey);
+                    List<String> lore = cs.getStringList("lore");
+                    int requiredLevel = cs.getInt("required_level", 1);
+
+                    // Create item with requirement info.
+                    ItemStack item = new ItemStack(material);
+                    ItemMeta meta = item.getItemMeta();
+                    meta.setDisplayName(ChatColor.RESET + displayName + " (Req Level: " + requiredLevel + ")");
+                    if (lore != null && !lore.isEmpty()) {
+                        List<String> coloredLore = new ArrayList<>();
+                        for (String line : lore) {
+                            coloredLore.add(ChatColor.translateAlternateColorCodes('&', line));
+                        }
+                        meta.setLore(coloredLore);
+                    }
+                    item.setItemMeta(meta);
+                    gui.setItem(slot, item);
+                    slot++;
+                }
+            }
+            player.openInventory(gui);
+        }
+
+        @EventHandler
+        public void onInventoryClick(InventoryClickEvent event) {
+            if (!event.getView().getTitle().startsWith(ChatColor.LIGHT_PURPLE + "Skill Tree")) return;
+            event.setCancelled(true);
+            if (event.getCurrentItem() == null || event.getCurrentItem().getType() == Material.AIR) return;
+            Player player = (Player) event.getWhoClicked();
+            String clicked = ChatColor.stripColor(event.getCurrentItem().getItemMeta().getDisplayName());
+            int reqLevel = 1;
+            try {
+                if (clicked.contains("(Req Level:")) {
+                    String reqPart = clicked.substring(clicked.indexOf("(Req Level:"), clicked.indexOf(")", clicked.indexOf("(Req Level:")));
+                    reqPart = reqPart.replace("(Req Level:", "").trim();
+                    reqLevel = Integer.parseInt(reqPart);
+                }
+            } catch (Exception e) {
+                reqLevel = 1;
+            }
+            if (PlayerLevelManager.getLevel(player) < reqLevel) {
+                player.sendMessage(ChatColor.RED + "You need to be at least level " + reqLevel + " to unlock this skill!");
+                return;
+            }
+            if (PlayerLevelManager.getSkillPoints(player) <= 0) {
+                player.sendMessage(ChatColor.RED + "You don't have any skill points!");
+                return;
+            }
+            // Example reward: if the skill is related to "health", increase player's health.
+            if (clicked.toLowerCase().contains("health")) {
+                PlayerStats stats = PlayerStatsManager.getPlayerStats(player);
+                stats.setHealth(stats.getHealth() + 5.0);
+                stats.applyToPlayer(player);
+                player.sendMessage(ChatColor.GREEN + "Your health has increased!");
+            }
+            PlayerLevelManager.useSkillPoint(player);
+            player.closeInventory();
+        }
+    }
+
+    // 10. Commands handles all command logic and tab auto-completion.
     public static class Commands implements CommandExecutor, TabCompleter {
         @Override
         public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
@@ -451,7 +579,6 @@ public class SandCore extends JavaPlugin {
                         try {
                             int amount = Integer.parseInt(args[1]);
                             if (player.hasPermission("sandcore.admin")) {
-                                // You can implement stat point addition logic here.
                                 player.sendMessage(ChatColor.GREEN + "Added " + amount + " stat point(s).");
                             } else {
                                 player.sendMessage(ChatColor.RED + "You do not have permission.");
@@ -478,6 +605,9 @@ public class SandCore extends JavaPlugin {
                         return true;
                     }
                     AdminStatsGUI.open(player, target);
+                    break;
+                case "skilltree":
+                    SkillTreeGUI.open(player);
                     break;
                 default:
                     player.sendMessage(ChatColor.RED + "Unknown command.");
@@ -507,6 +637,8 @@ public class SandCore extends JavaPlugin {
                         completions.add(p.getName());
                     }
                 }
+            } else if (cmd.equals("skilltree")) {
+                // No extra completions.
             }
             return completions;
         }
