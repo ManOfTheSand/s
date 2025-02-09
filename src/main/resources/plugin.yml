@@ -1,26 +1,33 @@
 name: SandCore
 main: com.sandcore.SandCore
-version: 1.0
+version: 1.2.0
 api-version: 1.21
+authors:
+  - ManOfTheSand
+description: "A Minecraft MMO Plugin with rich lore, dynamic classes, and an immersive skill-tree experience."
+depend: [DecentHolograms]
 commands:
+  screload:
+    description: "Reload the SandCore plugin configuration."
+    usage: "/screload"
+    aliases: [ "sreload" ]
   class:
-    description: "Manage your class selection."
+    description: "Manage your class selection and unlock ancient powers."
     usage: "/class <select|info|addcp>"
   stats:
-    description: "Manage your stat upgrades."
+    description: "Upgrade your character's stats and become legendary."
     usage: "/stats <upgrade|add>"
   adminstats:
-    description: "Admin command for player stats management."
+    description: "Admin command for overseeing player stats and adjusting destinies."
     usage: "/adminstats <player>"
   skilltree:
-    description: "Open the skill tree GUI."
+    description: "Open the immersive skill tree GUI and explore your potential."
     usage: "/skilltree"
+
 permissions:
-  sandcore.admin:
-    description: "Allows access to admin commands."
+  sandcore.reload:
+    description: "Allows reloading the plugin configuration."
     default: op
-dependencies:
-  server:
-    DecentHolograms:
-      load: BEFORE
-      required: true # This is the default when not presentt
+  sandcore.admin:
+    description: "Grants access to advanced admin commands and secret lore management."
+    default: op

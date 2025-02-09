@@ -1,0 +1,54 @@
+# Classes Configuration for SandCore Plugin
+# Define all available classes along with their materials, display names, lore,
+# and custom GUI placement settings to create an immersive experience.
+
+classes:
+  warrior:
+    material: DIAMOND_SWORD
+    display_name: "&#FF5555Warrior"
+    lore:
+      - "&#AAAAAAEmbrace the spirit of battle, clad in honor and valor."
+      - "&#FFFF55Melee specialist with unmatched strength and resilience."
+    health: 30.0
+    damage: 5.0
+    speed: 0.1
+    defense: 3.0
+    gui:
+      # The slot where this class's icon will appear in the class selection GUI.
+      icon_slot: 0
+      background: "&#330000"
+      extra:
+        - "&#FF0000An emblem of unstoppable power."
+        - "&#FFA500Forged in the crucible of conflict."
+  mage:
+    material: BLAZE_ROD
+    display_name: "&#AA00AAMage"
+    lore:
+      - "&#AAAAAACommand the arcane, wielding mystical forces."
+      - "&#FF55FFMaster of elemental magic and ancient secrets."
+    health: 20.0
+    damage: 7.0
+    speed: 0.1
+    defense: 1.5
+    gui:
+      icon_slot: 2
+      background: "&#220022"
+      extra:
+        - "&#8A2BE2Mystical and enigmatic, a beacon of arcane might."
+        - "&#9370DBHarnesses the cosmic energies of the void."
+  archer:
+    material: BOW
+    display_name: "&#55FF55Archer"
+    lore:
+      - "&#AAAAAASwift as the wind and precise as an arrow."
+      - "&#55FF55Ranged specialist, fated to strike from afar."
+    health: 25.0
+    damage: 4.0
+    speed: 0.12
+    defense: 2.0
+    gui:
+      icon_slot: 4
+      background: "&#005500"
+      extra:
+        - "&#00FF00Deadly accuracy and ethereal grace."
+        - "&#32CD32Inspired by the silent whispers of the forest."

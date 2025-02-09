@@ -168,7 +168,7 @@
     <build>
         <!-- This property changes the output directory for all build artifacts -->
         <!-- Your usual build plugins configuration goes here -->
-        <directory>G:/New Server project/plugins</directory>
+        <directory>G:/New Server project/plugin</directory>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
