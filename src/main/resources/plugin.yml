@@ -23,4 +23,4 @@ dependencies:
   server:
     DecentHolograms:
       load: BEFORE
-      required: true # This is the default when not present
+      required: true # This is the default when not presentt
