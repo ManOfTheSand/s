@@ -1,73 +1,94 @@
-package com.sandcore.mmo.gui;
+package com.sandcore;
 
-import com.sandcore.mmo.PlayerClassManager;
-import com.sandcore.mmo.PlayerStatsManager;
+import com.sandcore.utils.ChatColorUtil;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.Material;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
-import org.bukkit.event.EventHandler;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 public class ClassSelectionGUI implements Listener {
 
     public static void open(Player player) {
-        Inventory gui = Bukkit.createInventory(null, 9, ChatColor.GOLD + "Select Your Class");
+        // Load the classes configuration from classes.yml
+        File classesFile = new File(SandCore.getInstance().getDataFolder(), "classes.yml");
+        YamlConfiguration classesConfig = YamlConfiguration.loadConfiguration(classesFile);
+        ConfigurationSection classSection = classesConfig.getConfigurationSection("classes");
 
-        // Create sample class items.
-        ItemStack warrior = new ItemStack(Material.DIAMOND_SWORD);
-        ItemMeta warriorMeta = warrior.getItemMeta();
-        warriorMeta.setDisplayName(ChatColor.RED + "Warrior");
-        warrior.setItemMeta(warriorMeta);
+        // Determine inventory size. For simplicity, we'll use 9 slots (one row)
+        int inventorySize = 9;
+        // Set the title (use ui.header or a specific title)
+        String title = ChatColorUtil.translateHexColorCodes("&#FFD700Select Your Class");
+        Inventory gui = Bukkit.createInventory(null, inventorySize, title);
 
-        ItemStack mage = new ItemStack(Material.BLAZE_ROD);
-        ItemMeta mageMeta = mage.getItemMeta();
-        mageMeta.setDisplayName(ChatColor.BLUE + "Mage");
-        mage.setItemMeta(mageMeta);
+        // Retrieve extra space slot indices from the main config
+        List<Integer> extraSpaceSlots = SandCore.getInstance().getConfig().getIntegerList("ui.extra_space_slots");
+        Set<Integer> spacerSlots = new HashSet<>(extraSpaceSlots);
 
-        ItemStack archer = new ItemStack(Material.BOW);
-        ItemMeta archerMeta = archer.getItemMeta();
-        archerMeta.setDisplayName(ChatColor.GREEN + "Archer");
-        archer.setItemMeta(archerMeta);
+        // Prepare the list of class items
+        List<ItemStack> classItems = new ArrayList<>();
+        if (classSection != null) {
+            for (String classKey : classSection.getKeys(false)) {
+                ConfigurationSection cs = classSection.getConfigurationSection(classKey);
+                if (cs == null) continue;
+                String materialStr = cs.getString("material", "PAPER").toUpperCase();
+                Material material = Material.getMaterial(materialStr);
+                if (material == null) {
+                    material = Material.PAPER;
+                }
+                String displayName = cs.getString("display_name", classKey);
+                List<String> lore = cs.getStringList("lore");
 
-        // Put items in designated slots.
-        gui.setItem(2, warrior);
-        gui.setItem(4, mage);
-        gui.setItem(6, archer);
+                ItemStack item = new ItemStack(material);
+                ItemMeta meta = item.getItemMeta();
+                meta.setDisplayName(ChatColorUtil.translateHexColorCodes(displayName));
+                if (lore != null && !lore.isEmpty()) {
+                    List<String> coloredLore = new ArrayList<>();
+                    for (String line : lore) {
+                        coloredLore.add(ChatColorUtil.translateHexColorCodes(line));
+                    }
+                    meta.setLore(coloredLore);
+                }
+                item.setItemMeta(meta);
+                classItems.add(item);
+            }
+        }
+
+        // Create a filler item (spacer) for extra spacing in the GUI. For example, a dark glass pane.
+        ItemStack filler = new ItemStack(Material.BLACK_STAINED_GLASS_PANE);
+        ItemMeta fillerMeta = filler.getItemMeta();
+        fillerMeta.setDisplayName(" ");
+        filler.setItemMeta(fillerMeta);
+
+        // Fill the inventory: for each slot from 0 to inventorySize - 1, if it's in the spacer slots, add a filler; otherwise, use the next class item if available.
+        int classIndex = 0;
+        for (int slot = 0; slot < inventorySize; slot++) {
+            if (spacerSlots.contains(slot)) {
+                gui.setItem(slot, filler);
+            } else {
+                if (classIndex < classItems.size()) {
+                    gui.setItem(slot, classItems.get(classIndex));
+                    classIndex++;
+                }
+            }
+        }
 
         player.openInventory(gui);
     }
 
-    @EventHandler
+    // Optionally, add your InventoryClickEvent handler here to process clicks.
     public void onInventoryClick(InventoryClickEvent event) {
-        if (!ChatColor.stripColor(event.getView().getTitle()).equalsIgnoreCase("Select Your Class")) {
-            return;
-        }
-        event.setCancelled(true);
-
-        if (event.getCurrentItem() == null || event.getCurrentItem().getType() == Material.AIR) {
-            return;
-        }
-        Player player = (Player) event.getWhoClicked();
-        String className = ChatColor.stripColor(event.getCurrentItem().getItemMeta().getDisplayName());
-
-        // Check if the player has a class change point.
-        if (PlayerClassManager.getClassChangePoints(player) <= 0) {
-            player.sendMessage(ChatColor.RED + "You don't have any class change points!");
-            player.closeInventory();
-            return;
-        }
-
-        // Update the player's class, deduct one change point, and update stats.
-        PlayerClassManager.setPlayerClass(player, className);
-        PlayerClassManager.deductClassChangePoint(player);
-        PlayerStatsManager.updateStatsForClass(player, className);
-
-        player.sendMessage(ChatColor.GREEN + "Your class has been updated to " + className + "!");
-        player.closeInventory();
+        // Your event handling logic
     }
 }

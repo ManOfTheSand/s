@@ -1,7 +1,11 @@
 package com.sandcore;
 
+import com.sandcore.utils.ChatColorUtil;
+import eu.decentsoftware.holograms.api.DHAPI;
+import eu.decentsoftware.holograms.api.holograms.Hologram;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Location; // Added import to fix Location not found error
 import org.bukkit.Material;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.command.Command;
@@ -15,6 +19,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -27,6 +32,7 @@ import java.util.*;
 public class SandCore extends JavaPlugin {
 
     private static SandCore instance;
+
     public static SandCore getInstance() {
         return instance;
     }
@@ -36,6 +42,18 @@ public class SandCore extends JavaPlugin {
         instance = this;
         saveDefaultConfig();
 
+        // Add default values for hex-colored UI and hologram configuration.
+        FileConfiguration config = getConfig();
+        config.addDefault("ui.header", "&#00FF7F&lSANDCORE SKILLS");
+        config.addDefault("ui.reload-message", "&#FFD700Config reloaded! &#32CD32(v%version%)");
+        config.addDefault("hologram.lines", Arrays.asList(
+                "&#FFD700===============",
+                "&#00FF7FYour Skill Tree",
+                "&#FFD700==============="
+        ));
+        config.options().copyDefaults(true);
+        saveConfig();
+
         // Load persistent player data (class choices, levels, etc.)
         PlayerDataManager.loadData();
 
@@ -44,6 +62,8 @@ public class SandCore extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(new StatsUpgradeGUI(), this);
         Bukkit.getPluginManager().registerEvents(new AdminStatsGUI(), this);
         Bukkit.getPluginManager().registerEvents(new SkillTreeGUI(), this);
+        // NEW: Register the hologram event so players see a hologram on join
+        Bukkit.getPluginManager().registerEvents(new SkillTreeHologram(), this);
 
         // Register command executors and tab completers.
         Commands commands = new Commands();
@@ -55,8 +75,15 @@ public class SandCore extends JavaPlugin {
         getCommand("adminstats").setTabCompleter(commands);
         getCommand("skilltree").setExecutor(commands);
         getCommand("skilltree").setTabCompleter(commands);
+        // NEW: Register the reload command (screload)
+        getCommand("screload").setExecutor(new ReloadCommand());
 
-        // Startup message.
+        // Startup message with hex color support
+        String header = ChatColorUtil.translateHexColorCodes(
+                getConfig().getString("ui.header", "&#00FF7F&lSANDCORE PLUGIN LOADED!")
+        );
+        getLogger().info(header);
+
         getLogger().info("************************************************");
         getLogger().info("Super Cool Start Up Message: SandCore Plugin Loaded!");
         getLogger().info("************************************************");
@@ -168,7 +195,7 @@ public class SandCore extends JavaPlugin {
 
         public static void deductClassChangePoint(Player player) {
             int current = getClassChangePoints(player);
-            if(current > 0) {
+            if (current > 0) {
                 classChangePoints.put(player.getUniqueId(), current - 1);
             }
         }
@@ -185,17 +212,18 @@ public class SandCore extends JavaPlugin {
                     // Read config values:
                     String materialStr = cs.getString("material", "PAPER").toUpperCase();
                     Material material = Material.getMaterial(materialStr);
-                    if(material == null) material = Material.PAPER;
+                    if (material == null) material = Material.PAPER;
                     String displayName = cs.getString("display_name", classKey);
                     List<String> lore = cs.getStringList("lore");
 
                     ItemStack item = new ItemStack(material);
                     ItemMeta meta = item.getItemMeta();
                     meta.setDisplayName(ChatColor.RESET + displayName);
-                    if(lore != null && !lore.isEmpty()) {
+                    if (lore != null && !lore.isEmpty()) {
                         List<String> coloredLore = new ArrayList<>();
-                        for(String line : lore) {
-                            coloredLore.add(ChatColor.translateAlternateColorCodes('&', line));
+                        for (String line : lore) {
+                            // NEW: Using hex color support via ChatColorUtil
+                            coloredLore.add(ChatColorUtil.translateHexColorCodes(line));
                         }
                         meta.setLore(coloredLore);
                     }
@@ -210,7 +238,7 @@ public class SandCore extends JavaPlugin {
         public void onInventoryClick(InventoryClickEvent event) {
             if (!event.getView().getTitle().equals(ChatColor.GOLD + "Select Your Class")) return;
             event.setCancelled(true);
-            if(event.getCurrentItem() == null || event.getCurrentItem().getType() == Material.AIR) return;
+            if (event.getCurrentItem() == null || event.getCurrentItem().getType() == Material.AIR) return;
             Player player = (Player) event.getWhoClicked();
             String chosenClass = ChatColor.stripColor(event.getCurrentItem().getItemMeta().getDisplayName()).toLowerCase();
 
@@ -448,7 +476,8 @@ public class SandCore extends JavaPlugin {
     // 9. SkillTreeGUI displays a skill tree for leveling rewards.
     public static class SkillTreeGUI implements Listener {
         public static void open(Player player) {
-            Inventory gui = Bukkit.createInventory(null, 27, ChatColor.LIGHT_PURPLE + "Skill Tree");
+            Inventory gui = Bukkit.createInventory(null, 27,
+                    ChatColorUtil.translateHexColorCodes("&#00FF7F&lSkill Tree"));
             ConfigurationSection skillSection = getInstance().getConfig().getConfigurationSection("skilltree");
             if (skillSection != null) {
                 int slot = 0;
@@ -457,21 +486,19 @@ public class SandCore extends JavaPlugin {
                     String materialStr = cs.getString("material", "BARRIER").toUpperCase();
                     Material material = Material.getMaterial(materialStr);
                     if(material == null) material = Material.BARRIER;
-                    String displayName = cs.getString("display_name", skillKey);
-                    List<String> lore = cs.getStringList("lore");
-                    int requiredLevel = cs.getInt("required_level", 1);
+                    String displayName = ChatColorUtil.translateHexColorCodes(
+                            cs.getString("display_name", "&#FFD700" + skillKey)
+                    );
+                    List<String> lore = new ArrayList<>();
+                    for (String line : cs.getStringList("lore")) {
+                        lore.add(ChatColorUtil.translateHexColorCodes(line));
+                    }
+                    lore.add(ChatColorUtil.translateHexColorCodes("&#FF6347(Req Level: " + cs.getInt("required_level", 1) + ")"));
 
-                    // Create item with requirement info.
                     ItemStack item = new ItemStack(material);
                     ItemMeta meta = item.getItemMeta();
-                    meta.setDisplayName(ChatColor.RESET + displayName + " (Req Level: " + requiredLevel + ")");
-                    if (lore != null && !lore.isEmpty()) {
-                        List<String> coloredLore = new ArrayList<>();
-                        for (String line : lore) {
-                            coloredLore.add(ChatColor.translateAlternateColorCodes('&', line));
-                        }
-                        meta.setLore(coloredLore);
-                    }
+                    meta.setDisplayName(displayName);
+                    meta.setLore(lore);
                     item.setItemMeta(meta);
                     gui.setItem(slot, item);
                     slot++;
@@ -482,7 +509,7 @@ public class SandCore extends JavaPlugin {
 
         @EventHandler
         public void onInventoryClick(InventoryClickEvent event) {
-            if (!event.getView().getTitle().startsWith(ChatColor.LIGHT_PURPLE + "Skill Tree")) return;
+            if (!event.getView().getTitle().startsWith(ChatColorUtil.translateHexColorCodes("&#00FF7F"))) return;
             event.setCancelled(true);
             if (event.getCurrentItem() == null || event.getCurrentItem().getType() == Material.AIR) return;
             Player player = (Player) event.getWhoClicked();
@@ -505,7 +532,6 @@ public class SandCore extends JavaPlugin {
                 player.sendMessage(ChatColor.RED + "You don't have any skill points!");
                 return;
             }
-            // Example reward: if the skill is related to "health", increase player's health.
             if (clicked.toLowerCase().contains("health")) {
                 PlayerStats stats = PlayerStatsManager.getPlayerStats(player);
                 stats.setHealth(stats.getHealth() + 5.0);
@@ -641,6 +667,76 @@ public class SandCore extends JavaPlugin {
                 // No extra completions.
             }
             return completions;
+        }
+    }
+
+    /*====================
+      NEW FEATURES: RELOAD COMMAND & HOLOGRAM MANAGEMENT
+    ====================*/
+
+    // NEW: ReloadCommand - handles /screload to reload config and holograms.
+    public class ReloadCommand implements CommandExecutor {
+        @Override
+        public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+            if (!sender.hasPermission("sandcore.reload")) {
+                sender.sendMessage(ChatColorUtil.translateHexColorCodes("&#FF0000⛔ You don't have permission to reload the plugin!"));
+                return true;
+            }
+            reloadConfig();
+            // Also reload holograms.
+            HologramManager.reloadAll();
+            String version = getDescription().getVersion();
+            String msg = getConfig().getString("ui.reload-message", "&#FFD700Config reloaded!")
+                    .replace("%version%", version);
+            sender.sendMessage(ChatColorUtil.translateHexColorCodes(msg));
+            return true;
+        }
+    }
+
+    // NEW: HologramManager - manages creation and updating of holograms using DecentHolograms.
+    public static class HologramManager {
+        private static final Map<UUID, Hologram> activeHolograms = new HashMap<>();
+
+        public static void createHologram(Player player, List<String> lines) {
+            Location loc = player.getLocation().add(0, 2.5, 0);
+            List<String> formattedLines = new ArrayList<>();
+            for (String line : lines) {
+                formattedLines.add(ChatColorUtil.translateHexColorCodes(line));
+            }
+            Hologram hologram = DHAPI.createHologram("hologram-" + player.getUniqueId(), loc, formattedLines);
+            // Example: animate the hologram (if supported by your API)
+            // DHAPI.setHologramAnimation(hologram, "wave", 2);
+            activeHolograms.put(player.getUniqueId(), hologram);
+        }
+
+        public static void updateHologram(Player player, List<String> lines) {
+            Hologram hologram = activeHolograms.get(player.getUniqueId());
+            if (hologram != null) {
+                List<String> formattedLines = new ArrayList<>();
+                for (String line : lines) {
+                    formattedLines.add(ChatColorUtil.translateHexColorCodes(line));
+                }
+                DHAPI.setHologramLines(hologram, formattedLines);
+            }
+        }
+
+        public static void reloadAll() {
+            for (Hologram hologram : activeHolograms.values()) {
+                hologram.delete();
+            }
+            activeHolograms.clear();
+        }
+    }
+
+    // NEW: SkillTreeHologram - displays a hologram for the skill tree when a player joins.
+    public static class SkillTreeHologram implements Listener {
+        @EventHandler
+        public void onPlayerJoin(PlayerJoinEvent event) {
+            Player player = event.getPlayer();
+            List<String> lines = getInstance().getConfig().getStringList("hologram.lines");
+            if (!lines.isEmpty()) {
+                HologramManager.createHologram(player, lines);
+            }
         }
     }
 }
