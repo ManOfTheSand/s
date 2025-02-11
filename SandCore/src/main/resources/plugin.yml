@@ -1,0 +1,7 @@
+name: SandCore
+main: com.sandcore.mmo.MMOCoreMain
+version: 1.0
+api-version: "1.21"
+commands:
+  mmocore:
+    description: "Executes the MMOCore command" 
